@@ -13,12 +13,14 @@ def export_txt(nodes: list[FileNode], root_path: str, parent_window=None) -> boo
     """
     tree_text = format_as_tree(nodes, root_path)
     
+    default_dir = os.path.dirname(root_path.rstrip(os.sep))
+    default_name = f"{os.path.basename(root_path.rstrip(os.sep))}_目录树.txt"
     file_path = filedialog.asksaveasfilename(
-        title="导出 TXT 文件",
+        title="导出 TXT 文件 — 保存到扫描文件夹同级目录",
         defaultextension=".txt",
         filetypes=[("文本文件", "*.txt"), ("所有文件", "*.*")],
-        initialfile=f"{os.path.basename(root_path.rstrip(os.sep))}_目录树.txt",
-        parent=parent_window,
+        initialdir=default_dir,
+        initialfile=default_name,
     )
     if not file_path:
         return False
@@ -52,12 +54,14 @@ def export_excel(
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
+    default_dir = os.path.dirname(root_path.rstrip(os.sep))
+    default_name = f"{os.path.basename(root_path.rstrip(os.sep))}_目录树.xlsx"
     file_path = filedialog.asksaveasfilename(
-        title="导出 Excel 文件",
+        title="导出 Excel 文件 — 保存到扫描文件夹同级目录",
         defaultextension=".xlsx",
         filetypes=[("Excel 文件", "*.xlsx"), ("所有文件", "*.*")],
-        initialfile=f"{os.path.basename(root_path.rstrip(os.sep))}_目录树.xlsx",
-        parent=parent_window,
+        initialdir=default_dir,
+        initialfile=default_name,
     )
     if not file_path:
         return False

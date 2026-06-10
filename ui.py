@@ -19,7 +19,7 @@ class FileTreeApp:
             themename="litera",  # 浅色主题，搭配淡蓝
             title="文件树助手",
             size=(960, 680),
-            minsize=(700, 500),
+            minsize=(960, 600),
         )
         
         # 当前扫描结果
@@ -144,37 +144,9 @@ class FileTreeApp:
         # 按钮放在 label 旁边（通过 place 或重新组织）
         # 改为放在 main_frame 中的独立行更简洁 —— 在底部状态栏旁边
 
-        # ---- 结果展示区 ----
-        result_frame = ttkb.LabelFrame(main_frame, text="📋 扫描结果")
-        result_inner = ttkb.Frame(result_frame, padding=(8, 6))
-        result_inner.pack(fill=BOTH, expand=YES)
-        result_frame.pack(fill=BOTH, expand=YES, pady=(0, 8))
-
-        # 树形文本显示（等宽字体）
-        self.result_text = tk.Text(
-            result_inner,
-            font=("Consolas", 10),
-            wrap=tk.NONE,
-            bg="#FAFAFA",
-            fg="#263238",
-            relief=tk.FLAT,
-            padx=8,
-            pady=6,
-            selectbackground="#90CAF9",
-            selectforeground="#0D47A1",
-        )
-        self.result_text.pack(fill=BOTH, expand=YES)
-
-        # 滚动条
-        v_scroll = ttkb.Scrollbar(result_inner, orient=VERTICAL, command=self.result_text.yview)
-        v_scroll.pack(side=RIGHT, fill=Y)
-        h_scroll = ttkb.Scrollbar(result_inner, orient=HORIZONTAL, command=self.result_text.xview)
-        h_scroll.pack(side=BOTTOM, fill=X)
-        self.result_text.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
-
-        # ---- 底部操作栏 ----
+        # ---- 底部操作栏（先 pack，确保始终可见） ----
         bottom_frame = ttkb.Frame(main_frame)
-        bottom_frame.pack(fill=X)
+        bottom_frame.pack(fill=X, side=BOTTOM, pady=(8, 0))
 
         self.status_label = ttkb.Label(
             bottom_frame, 
@@ -188,24 +160,59 @@ class FileTreeApp:
 
         self.copy_btn = ttkb.Button(
             btn_frame, text="📋 复制到剪贴板", command=self._on_copy,
-            bootstyle="outline-secondary", width=18
+            bootstyle="outline-secondary", width=16
         )
-        self.copy_btn.pack(side=LEFT, padx=(0, 6))
+        self.copy_btn.pack(side=LEFT, padx=(0, 4))
 
         self.export_txt_btn = ttkb.Button(
             btn_frame, text="📄 导出 TXT", command=self._on_export_txt,
-            bootstyle="outline-secondary", width=14
+            bootstyle="outline-secondary", width=12
         )
-        self.export_txt_btn.pack(side=LEFT, padx=(0, 6))
+        self.export_txt_btn.pack(side=LEFT, padx=(0, 4))
 
         self.export_excel_btn = ttkb.Button(
             btn_frame, text="📊 导出 Excel", command=self._on_export_excel,
-            bootstyle="outline-secondary", width=16
+            bootstyle="outline-secondary", width=14
         )
         self.export_excel_btn.pack(side=LEFT)
 
         # 初始禁用导出按钮
         self._set_export_buttons_state(False)
+
+        # ---- 结果展示区（最后 pack，占据剩余空间） ----
+        result_frame = ttkb.LabelFrame(main_frame, text="📋 扫描结果")
+        result_frame.pack(fill=BOTH, expand=YES, pady=(0, 0))
+        result_inner = ttkb.Frame(result_frame, padding=(8, 6))
+        result_inner.pack(fill=BOTH, expand=YES)
+
+        # 树形文本显示（等宽字体）
+        # 嵌套布局：text_frame(Text+垂直滚动条) + 底部横向滚动条
+        text_frame = ttkb.Frame(result_inner)
+        text_frame.pack(fill=BOTH, expand=YES)
+
+        self.result_text = tk.Text(
+            text_frame,
+            font=("Consolas", 10),
+            wrap=tk.NONE,
+            bg="#FAFAFA",
+            fg="#263238",
+            relief=tk.FLAT,
+            padx=8,
+            pady=6,
+            selectbackground="#90CAF9",
+            selectforeground="#0D47A1",
+        )
+        self.result_text.pack(side=LEFT, fill=BOTH, expand=YES)
+
+        # 垂直滚动条（右侧）
+        v_scroll = ttkb.Scrollbar(text_frame, orient=VERTICAL, command=self.result_text.yview)
+        v_scroll.pack(side=RIGHT, fill=Y)
+
+        # 横向滚动条（底部）
+        h_scroll = ttkb.Scrollbar(result_inner, orient=HORIZONTAL, command=self.result_text.xview)
+        h_scroll.pack(side=BOTTOM, fill=X)
+
+        self.result_text.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
 
     # =================================================================
     #  事件处理
@@ -303,34 +310,47 @@ class FileTreeApp:
     def _on_export_txt(self):
         """导出 TXT"""
         if not self.current_nodes:
+            messagebox.showwarning("提示", "请先扫描一个文件夹。", parent=self.root)
             return
-        success = export_txt(self.current_nodes, self.current_root_path, parent_window=self.root)
-        if success:
-            self.status_label.configure(text="✅ TXT 导出成功！")
+        try:
+            success = export_txt(self.current_nodes, self.current_root_path, parent_window=self.root)
+            if success:
+                self.status_label.configure(text="✅ TXT 导出成功！")
+            else:
+                self.status_label.configure(text="已取消 TXT 导出")
+        except Exception as e:
+            messagebox.showerror("导出失败", f"导出 TXT 时出错：\n{e}", parent=self.root)
 
     def _on_export_excel(self):
         """导出 Excel（先询问格式）"""
         if not self.current_nodes:
+            messagebox.showwarning("提示", "请先扫描一个文件夹。", parent=self.root)
             return
         
         # 弹窗选择导出格式
         choice = messagebox.askyesnocancel(
             "Excel 导出格式",
             "请选择导出格式：\n\n"
-            "  · 「是」— 完整信息（层级、名称、类型、大小、修改日期、路径）\n"
-            "  · 「否」— 基础信息（层级、名称、类型、路径）\n"
+            "  · 「是(Y)」— 完整信息（层级、名称、类型、大小、修改日期、路径）\n"
+            "  · 「否(N)」— 基础信息（层级、名称、类型、路径）\n"
             "  · 「取消」— 不导出",
             parent=self.root,
         )
         if choice is None:
-            return  # 取消
+            self.status_label.configure(text="已取消 Excel 导出")
+            return
 
-        success = export_excel(
-            self.current_nodes, self.current_root_path, 
-            full_info=choice, parent_window=self.root
-        )
-        if success:
-            self.status_label.configure(text="✅ Excel 导出成功！")
+        try:
+            success = export_excel(
+                self.current_nodes, self.current_root_path, 
+                full_info=choice, parent_window=self.root
+            )
+            if success:
+                self.status_label.configure(text="✅ Excel 导出成功！")
+            else:
+                self.status_label.configure(text="已取消 Excel 导出")
+        except Exception as e:
+            messagebox.showerror("导出失败", f"导出 Excel 时出错：\n{e}", parent=self.root)
 
     def _toggle_filter(self):
         """折叠/展开过滤面板"""

@@ -127,8 +127,6 @@ def format_as_tree(nodes: list[FileNode], root_path: str = "") -> str:
             is_last = (i == len(nodes) - 1)
             connector = "└── " if is_last else "├── "
             line = prefix + connector + node.name
-            if node.is_dir:
-                line += "/"
             lines.append(line)
 
             if node.children:
