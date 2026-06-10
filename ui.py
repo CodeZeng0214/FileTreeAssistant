@@ -144,18 +144,24 @@ class FileTreeApp:
         # 按钮放在 label 旁边（通过 place 或重新组织）
         # 改为放在 main_frame 中的独立行更简洁 —— 在底部状态栏旁边
 
-        # ---- 底部操作栏（先 pack，确保始终可见） ----
+        # ---- 底部操作栏（两行：状态行 + 按钮行） ----
         bottom_frame = ttkb.Frame(main_frame)
         bottom_frame.pack(fill=X, side=BOTTOM, pady=(8, 0))
 
+        # 第1行：状态信息
+        status_row = ttkb.Frame(bottom_frame)
+        status_row.pack(fill=X, side=TOP)
         self.status_label = ttkb.Label(
-            bottom_frame, 
+            status_row, 
             text="就绪 — 请选择文件夹后点击「开始扫描」",
-            font=("微软雅黑", 9), foreground="#666"
+            font=("微软雅黑", 9), foreground="#666",
         )
         self.status_label.pack(side=LEFT, padx=(2, 0))
 
-        btn_frame = ttkb.Frame(bottom_frame)
+        # 第2行：操作按钮（右对齐）
+        btn_row = ttkb.Frame(bottom_frame)
+        btn_row.pack(fill=X, side=TOP, pady=(2, 0))
+        btn_frame = ttkb.Frame(btn_row)
         btn_frame.pack(side=RIGHT)
 
         self.copy_btn = ttkb.Button(
@@ -186,7 +192,10 @@ class FileTreeApp:
         result_inner.pack(fill=BOTH, expand=YES)
 
         # 树形文本显示（等宽字体）
-        # 嵌套布局：text_frame(Text+垂直滚动条) + 底部横向滚动条
+        # 嵌套布局：先 pack 横向滚动条占位（底部），再 text_frame（剩余空间）
+        h_scroll = ttkb.Scrollbar(result_inner, orient=HORIZONTAL)
+        h_scroll.pack(side=BOTTOM, fill=X)
+
         text_frame = ttkb.Frame(result_inner)
         text_frame.pack(fill=BOTH, expand=YES)
 
@@ -208,10 +217,8 @@ class FileTreeApp:
         v_scroll = ttkb.Scrollbar(text_frame, orient=VERTICAL, command=self.result_text.yview)
         v_scroll.pack(side=RIGHT, fill=Y)
 
-        # 横向滚动条（底部）
-        h_scroll = ttkb.Scrollbar(result_inner, orient=HORIZONTAL, command=self.result_text.xview)
-        h_scroll.pack(side=BOTTOM, fill=X)
-
+        # 绑定横向滚动条（延迟绑定，因为需要 self.result_text 先存在）
+        h_scroll.configure(command=self.result_text.xview)
         self.result_text.configure(yscrollcommand=v_scroll.set, xscrollcommand=h_scroll.set)
 
     # =================================================================
@@ -276,12 +283,12 @@ class FileTreeApp:
             self.result_text.delete("1.0", tk.END)
             self.result_text.insert("1.0", self.tree_text)
 
-            # 统计信息
+            # 统计信息（精简格式，避免挤走按钮）
             stats = get_statistics(nodes)
             status = (
-                f"扫描完成 — 📁 {stats['dir_count']} 个文件夹 | "
-                f"📄 {stats['file_count']} 个文件 | "
-                f"💾 总大小 {stats['total_size_str']}"
+                f"📁 {stats['dir_count']} 文件夹  "
+                f"📄 {stats['file_count']} 文件  "
+                f"💾 {stats['total_size_str']}"
             )
             self.status_label.configure(text=status)
             self._set_export_buttons_state(True)
@@ -299,11 +306,9 @@ class FileTreeApp:
         try:
             import pyperclip
             pyperclip.copy(self.tree_text)
+            prev_text = self.status_label.cget("text")
             self.status_label.configure(text="✅ 已复制到剪贴板！")
-            self.root.after(3000, lambda: self.status_label.configure(
-                text=self.status_label.cget("text").replace("✅ 已复制到剪贴板！", 
-                    f"扫描完成（已复制）")
-            ))
+            self.root.after(3000, lambda: self.status_label.configure(text=prev_text))
         except Exception as e:
             messagebox.showerror("复制失败", f"复制到剪贴板时出错：\n{e}", parent=self.root)
 
