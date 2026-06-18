@@ -20,6 +20,8 @@ uv run pyinstaller ^
     --hidden-import ttkbootstrap ^
     --hidden-import openpyxl ^
     --hidden-import pyperclip ^
+    --hidden-import tkinterdnd2 ^
+    --collect-all tkinterdnd2 ^
     --clean ^
     main.py
 

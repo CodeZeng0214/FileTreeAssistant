@@ -1,26 +1,55 @@
-"""UI 界面模块 —— 基于 tkinter + ttkbootstrap 的主窗口"""
+"""UI 界面模块 —— 基于 tkinter + ttkbootstrap 的主窗口，支持文件夹拖入"""
 
+import ctypes
 import os
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import ttkbootstrap as ttkb
 from ttkbootstrap.constants import *
 
+from tkinterdnd2 import TkinterDnD, DND_FILES
+
 from scanner import scan_directory, format_as_tree, get_statistics, FileNode
 from exporter import export_txt, export_excel
+
+
+def _enable_windows_dpi_awareness():
+    """启用 Windows 高 DPI 感知（避免界面模糊），对标 ttkbootstrap.Window 的行为"""
+    if os.name != "nt":
+        return
+    try:
+        # 优先尝试 Per-Monitor V2（Windows 10 1703+），可获得最清晰的缩放效果
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            # 回退到系统级 DPI 感知
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+        except Exception:
+            try:
+                # 最后的兜底方案
+                ctypes.windll.user32.SetProcessDPIAware()
+            except Exception:
+                pass
 
 
 class FileTreeApp:
     """文件目录树助手主应用"""
 
     def __init__(self):
-        # 使用 ttkbootstrap 的淡蓝色主题
-        self.root = ttkb.Window(
-            themename="litera",  # 浅色主题，搭配淡蓝
-            title="文件树助手",
-            size=(960, 680),
-            minsize=(960, 600),
-        )
+        # 启用高 DPI 感知 —— 必须在创建任何 tk 窗口之前调用
+        _enable_windows_dpi_awareness()
+
+        # 使用 TkinterDnD.Tk 作为根窗口（支持拖放），手动应用 ttkbootstrap 主题
+        self.root = TkinterDnD.Tk()
+        self.root.title("文件树助手")
+        self.root.geometry("960x680")
+        self.root.minsize(960, 600)
+        
+        # 根据屏幕 DPI 调整 tk 缩放比例
+        self._apply_tk_dpi_scaling()
+
+        # 应用 ttkbootstrap 主题（litera 浅色主题 + 淡蓝风格）
+        self._style = ttkb.Style("litera")
         
         # 当前扫描结果
         self.current_nodes: list[FileNode] = []
@@ -29,6 +58,9 @@ class FileTreeApp:
 
         # 构建界面
         self._build_ui()
+        
+        # 注册拖放支持
+        self._setup_drag_drop()
         
         # 居中窗口
         self._center_window()
@@ -39,12 +71,12 @@ class FileTreeApp:
 
     def _build_ui(self):
         """构建完整的 UI 布局"""
-        # --- 样式定制 ---
+        # --- 样式定制（统一放大字号） ---
         style = ttkb.Style()
-        style.configure("TLabel", font=("微软雅黑", 10))
-        style.configure("TButton", font=("微软雅黑", 10))
-        style.configure("TCheckbutton", font=("微软雅黑", 10))
-        style.configure("primary.TButton", font=("微软雅黑", 10, "bold"))
+        style.configure("TLabel", font=("微软雅黑", 12))
+        style.configure("TButton", font=("微软雅黑", 12))
+        style.configure("TCheckbutton", font=("微软雅黑", 12))
+        style.configure("primary.TButton", font=("微软雅黑", 12, "bold"))
         
         # 主容器
         main_frame = ttkb.Frame(self.root, padding=(12, 10))
@@ -63,8 +95,8 @@ class FileTreeApp:
         ttkb.Label(path_row, text="目标文件夹：", width=12).pack(side=LEFT)
         
         self.path_var = tk.StringVar()
-        path_entry = ttkb.Entry(path_row, textvariable=self.path_var, font=("微软雅黑", 10))
-        path_entry.pack(side=LEFT, fill=X, expand=YES, padx=(0, 6))
+        self.path_entry = ttkb.Entry(path_row, textvariable=self.path_var, font=("微软雅黑", 12))
+        self.path_entry.pack(side=LEFT, fill=X, expand=YES, padx=(0, 6))
         
         browse_btn = ttkb.Button(
             path_row, text="浏览...", command=self._on_browse, 
@@ -88,10 +120,10 @@ class FileTreeApp:
             values=["不限制", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
             state="readonly",
             width=8,
-            font=("微软雅黑", 10),
+            font=("微软雅黑", 12),
         )
         self.depth_combo.pack(side=LEFT, padx=(0, 4))
-        ttkb.Label(depth_frame, text="级", font=("微软雅黑", 9)).pack(side=LEFT)
+        ttkb.Label(depth_frame, text="级", font=("微软雅黑", 11)).pack(side=LEFT)
 
         # 扫描按钮
         self.scan_btn = ttkb.Button(
@@ -126,13 +158,13 @@ class FileTreeApp:
         self.ext_var = tk.StringVar()
         ext_entry = ttkb.Entry(
             filter_inner, textvariable=self.ext_var, 
-            font=("微软雅黑", 10), width=22
+            font=("微软雅黑", 12), width=22
         )
         ext_entry.pack(side=LEFT)
         ttkb.Label(
             filter_inner, 
             text="  例: .txt,.py  （留空=全部）",
-            font=("微软雅黑", 8), foreground="#888"
+            font=("微软雅黑", 10), foreground="#888"
         ).pack(side=LEFT)
 
         # 折叠按钮
@@ -154,7 +186,7 @@ class FileTreeApp:
         self.status_label = ttkb.Label(
             status_row, 
             text="就绪 — 请选择文件夹后点击「开始扫描」",
-            font=("微软雅黑", 9), foreground="#666",
+            font=("微软雅黑", 11), foreground="#666",
         )
         self.status_label.pack(side=LEFT, padx=(2, 0))
 
@@ -201,7 +233,7 @@ class FileTreeApp:
 
         self.result_text = tk.Text(
             text_frame,
-            font=("Consolas", 10),
+            font=("Consolas", 11),
             wrap=tk.NONE,
             bg="#FAFAFA",
             fg="#263238",
@@ -230,6 +262,63 @@ class FileTreeApp:
         folder = filedialog.askdirectory(title="选择要扫描的文件夹", parent=self.root)
         if folder:
             self.path_var.set(folder)
+
+    # =================================================================
+    #  拖放支持
+    # =================================================================
+
+    def _setup_drag_drop(self):
+        """注册拖放目标（根窗口 + 路径输入框）"""
+        # 根窗口作为拖放目标
+        self.root.drop_target_register(DND_FILES)
+        self.root.dnd_bind("<<Drop>>", self._on_drop)
+        self.root.dnd_bind("<<DropEnter>>", self._on_drop_enter)
+        self.root.dnd_bind("<<DropLeave>>", self._on_drop_leave)
+
+        # 路径输入框也作为拖放目标（体验更好）
+        self.path_entry.drop_target_register(DND_FILES)
+        self.path_entry.dnd_bind("<<Drop>>", self._on_drop)
+        self.path_entry.dnd_bind("<<DropEnter>>", self._on_drop_enter)
+        self.path_entry.dnd_bind("<<DropLeave>>", self._on_drop_leave)
+
+    def _on_drop_enter(self, event):
+        """拖入时高亮提示"""
+        self.path_entry.configure(foreground="#1565C0")
+        self.path_var.set("📂 释放鼠标以选择此文件夹...")
+
+    def _on_drop_leave(self, event):
+        """拖离时恢复原状"""
+        self.path_entry.configure(foreground="")
+        if not self.current_root_path:
+            self.path_var.set("")
+
+    def _on_drop(self, event):
+        """处理文件夹拖入事件"""
+        raw_data = event.data
+        # 清理路径（去除花括号和换行等）
+        path = raw_data.strip().strip("{}").strip()
+        
+        # Windows 可能返回用空格分隔的多个路径，取第一个
+        if path:
+            # 处理可能的多文件拖入（仅取第一个）
+            paths = path.split("} {")
+            if len(paths) > 1:
+                path = paths[0].strip("{}")
+            
+            # 验证路径
+            if os.path.isdir(path):
+                self.path_var.set(path)
+                # 可选：自动触发扫描
+                # self._on_scan()
+            elif os.path.isfile(path):
+                # 如果是文件，取其所在文件夹
+                parent_dir = os.path.dirname(path)
+                self.path_var.set(parent_dir)
+            else:
+                messagebox.showwarning("提示", f"无法识别的路径：\n{path}", parent=self.root)
+                self.path_var.set("")
+        
+        self.path_entry.configure(foreground="")
 
     def _on_scan(self):
         """执行扫描"""
@@ -389,6 +478,22 @@ class FileTreeApp:
         x = (sw - w) // 2
         y = (sh - h) // 2
         self.root.geometry(f"+{x}+{y}")
+
+    def _apply_tk_dpi_scaling(self):
+        """根据屏幕 DPI 设置 tk 内部缩放比例，确保高 DPI 下字体清晰"""
+        if os.name != "nt":
+            return
+        try:
+            # 获取系统 DPI
+            hdc = ctypes.windll.user32.GetDC(0)
+            dpi_x = ctypes.windll.gdi32.GetDeviceCaps(hdc, 88)  # LOGPIXELSX
+            ctypes.windll.user32.ReleaseDC(0, hdc)
+            # 标准 DPI = 96，计算缩放因子
+            scale_factor = dpi_x / 96.0
+            if scale_factor > 1.0:
+                self.root.tk.call("tk", "scaling", scale_factor)
+        except Exception:
+            pass  # 获取失败时使用默认缩放，不影响正常使用
 
     def run(self):
         """启动应用"""
